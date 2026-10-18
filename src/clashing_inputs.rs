@@ -186,21 +186,6 @@ impl<A: Actionlike> InputMap<A> {
         }
     }
 
-    /// Updates the cache of possible input clashes
-    pub(crate) fn possible_clashes(&self) -> Vec<Clash<A>> {
-        let mut clashes = Vec::default();
-
-        for action_a in self.buttonlike_actions() {
-            for action_b in self.buttonlike_actions() {
-                if let Some(clash) = self.possible_clash(action_a, action_b) {
-                    clashes.push(clash);
-                }
-            }
-        }
-
-        clashes
-    }
-
     /// Gets the set of clashing action-input pairs
     ///
     /// Returns both the action and [`UserInput`](crate::user_input::UserInput)s for each clashing set
@@ -211,19 +196,22 @@ impl<A: Actionlike> InputMap<A> {
         input_store: &CentralInputStore,
         gamepad: Entity,
     ) -> Vec<Clash<A>> {
+        // Clashes can only occur if both actions were triggered,
+        // so only pairs of pressed actions need their bindings decomposed
+        let pressed: Vec<&A> = self
+            .buttonlike_actions()
+            .filter(|action| updated_actions.pressed(action))
+            .collect();
+
         let mut clashes = Vec::default();
 
-        // We can limit our search to the cached set of possibly clashing actions
-        for clash in self.possible_clashes() {
-            let pressed_a = updated_actions.pressed(&clash.action_a);
-            let pressed_b = updated_actions.pressed(&clash.action_b);
-
-            // Clashes can only occur if both actions were triggered
-            // This is not strictly necessary, but saves work
-            if pressed_a && pressed_b {
-                // Check if the potential clash occurred based on the pressed inputs
-                if let Some(clash) = check_clash(&clash, input_store, gamepad) {
-                    clashes.push(clash)
+        for &action_a in &pressed {
+            for &action_b in &pressed {
+                if let Some(clash) = self.possible_clash(action_a, action_b) {
+                    // Check if the potential clash occurred based on the pressed inputs
+                    if let Some(clash) = check_clash(&clash, input_store, gamepad) {
+                        clashes.push(clash)
+                    }
                 }
             }
         }
